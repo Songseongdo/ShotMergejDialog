@@ -456,9 +456,13 @@ def build_merge_gcq_values(gcq_data):
         attack_angle,
         club_path,
         face_to_target,
-        get_merge_value(gcq_data, ("Lie", "Lie(GCQ)"), ()),
-        get_merge_value(gcq_data, ("Loft", "Loft(GCQ)"), ()),
-        get_merge_value(gcq_data, ("Closure Rate", "Closure Rate(GCQ)"), ()),
+        get_merge_value(gcq_data, ("Lie", "Lie (deg)", "Lie_DEG", "Lie(GCQ)"), ("lie",)),
+        get_merge_value(gcq_data, ("Loft", "Loft (deg)", "Loft_DEG", "Loft(GCQ)"), ("loft",)),
+        get_merge_value(
+            gcq_data,
+            ("Closure Rate", "Closure Rate (deg)", "ClosureRate", "ClosureRate_DEG", "Closure Rate(GCQ)"),
+            ("closure_rate",),
+        ),
         get_merge_value(gcq_data, ("Face Impact Lateral", "Face Impact Lateral(GCQ)"), ()),
         get_merge_value(gcq_data, ("Face Impact Vertical", "Face Impact Vertical(GCQ)"), ()),
     ]
@@ -689,6 +693,28 @@ def parse_optional_float(value, field_name):
         raise ValueError(f"Invalid {field_name}: {value}") from exc
 
 
+def normalize_field_name(field_name):
+    return re.sub(r"[^a-z0-9]+", "", str(field_name).lower())
+
+
+def get_first_mapping_value(mapping, *field_names):
+    for field_name in field_names:
+        value = mapping.get(field_name)
+        if value not in (None, ""):
+            return value
+
+    normalized = {
+        normalize_field_name(key): value
+        for key, value in mapping.items()
+    }
+    for field_name in field_names:
+        value = normalized.get(normalize_field_name(field_name))
+        if value not in (None, ""):
+            return value
+
+    return ""
+
+
 def normalize_shot_data(data):
     timestamp = str(data.get("timestamp", "")).strip()
     if not timestamp:
@@ -704,6 +730,19 @@ def normalize_shot_data(data):
         "club": str(data.get("club", "")).strip(),
         "carry": parse_optional_float(data.get("carry", ""), "carry"),
         "total_distance": parse_optional_float(data.get("total_distance", ""), "total_distance"),
+        "lie": parse_optional_float(get_first_mapping_value(data, "lie", "Lie", "Lie_DEG", "Lie (deg)"), "lie"),
+        "loft": parse_optional_float(get_first_mapping_value(data, "loft", "Loft", "Loft_DEG", "Loft (deg)"), "loft"),
+        "closure_rate": parse_optional_float(
+            get_first_mapping_value(
+                data,
+                "closure_rate",
+                "Closure Rate",
+                "ClosureRate",
+                "ClosureRate_DEG",
+                "Closure Rate (deg)",
+            ),
+            "closure_rate",
+        ),
         "source_format": "json",
     }
 
@@ -735,21 +774,7 @@ def parse_csv_text_payload(raw_text):
 
 
 def get_first_csv_value(parsed, *field_names):
-    for field_name in field_names:
-        value = parsed.get(field_name)
-        if value not in (None, ""):
-            return value
-
-    normalized = {
-        key.lower().replace(" ", ""): value
-        for key, value in parsed.items()
-    }
-    for field_name in field_names:
-        value = normalized.get(field_name.lower().replace(" ", ""))
-        if value not in (None, ""):
-            return value
-
-    return ""
+    return get_first_mapping_value(parsed, *field_names)
 
 
 def normalize_csv_text_shot(raw_text):
@@ -762,6 +787,16 @@ def normalize_csv_text_shot(raw_text):
     horiz_path = get_first_csv_value(parsed, "Horiz Path (deg)", "Horiz Path(deg)")
     vert_path = get_first_csv_value(parsed, "Vert Path (deg)", "Vert Path(deg)")
     face_to_target = get_first_csv_value(parsed, "Face to Target (deg)", "Face to Target(deg)")
+    lie = get_first_csv_value(parsed, "Lie", "Lie (deg)", "Lie_DEG")
+    loft = get_first_csv_value(parsed, "Loft", "Loft (deg)", "Loft_DEG")
+    closure_rate = get_first_csv_value(
+        parsed,
+        "Closure Rate",
+        "Closure Rate (deg)",
+        "Closure Rate(deg)",
+        "ClosureRate",
+        "ClosureRate_DEG",
+    )
 
     return {
         "timestamp": shot_id,
@@ -786,6 +821,9 @@ def normalize_csv_text_shot(raw_text):
         "total_distance": parse_optional_float(parsed.get("Total Distance (m)", ""), "Total Distance (m)"),
         "offline": parse_optional_float(parsed.get("Offline (m)", ""), "Offline (m)"),
         "peak_height": parse_optional_float(parsed.get("Peak Height (m)", ""), "Peak Height (m)"),
+        "lie": parse_optional_float(lie, "Lie"),
+        "loft": parse_optional_float(loft, "Loft"),
+        "closure_rate": parse_optional_float(closure_rate, "Closure Rate"),
         "received_at": "",
         "source_format": "csv_text",
         "raw_text": raw_text,
