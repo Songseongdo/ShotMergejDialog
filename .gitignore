@@ -2,3 +2,8 @@ build/
 dist/
 build_*/
 dist_*/
+__pycache__/
+*.py[cod]
+*.ini
+shot_history.csv
+latest_shot.json
