@@ -402,6 +402,21 @@ def calculate_tilt_angle(backspin, sidespin):
     return format_merge_float(math.degrees(math.atan(sidespin_value / backspin_value)))
 
 
+def sanitize_merge_speed(value):
+    speed_value = parse_merge_float(value)
+    if speed_value is None or speed_value < 0 or speed_value >= 1000:
+        return "0"
+    return format_merge_float(speed_value)
+
+
+def calculate_smash_factor(ball_speed, club_speed):
+    ball_speed_value = parse_merge_float(ball_speed)
+    club_speed_value = parse_merge_float(club_speed)
+    if ball_speed_value is None or club_speed_value in (None, 0):
+        return "0"
+    return format_merge_float(ball_speed_value / club_speed_value)
+
+
 def format_compact_datetime(value):
     text = str(value or "").strip()
     match = re.match(r"^(\d{4})[./-](\d{2})[./-](\d{2})[_ T](\d{2})[.:](\d{2})[.:](\d{2})", text)
@@ -433,13 +448,20 @@ def build_merge_gcq_values(gcq_data):
     gcq_datetime = get_merge_value(gcq_data, ("Date-Time", "Date-Time(GCQ)"), ("received_at",))
     if not gcq_datetime:
         gcq_datetime = get_merge_value(gcq_data, ("Shot ID",), ("timestamp", "shot_id"))
+    ball_speed = sanitize_merge_speed(
+        get_merge_value(gcq_data, ("Ball Speed", "Ball Speed (m/s)", "Ball Speed(GCQ)"), ("ball_speed",))
+    )
+    club_speed = sanitize_merge_speed(
+        get_merge_value(gcq_data, ("Club Speed", "Club head Speed (m/s)", "Club Speed (m/s)", "Club Speed(GCQ)"), ("club_velocity",))
+    )
+    efficiency = calculate_smash_factor(ball_speed, club_speed)
 
     return [
         "GCQ",
         gcq_datetime,
         get_merge_value(gcq_data, ("Club", "Club(GCQ)"), ("club", "club_type")),
         get_merge_value(gcq_data, ("Ball", "Ball(GCQ)", "Ball Type"), ()),
-        get_merge_value(gcq_data, ("Ball Speed", "Ball Speed (m/s)", "Ball Speed(GCQ)"), ("ball_speed",)),
+        ball_speed,
         get_merge_value(gcq_data, ("Launch Angle", "Launch Angle (deg)", "Launch Angle(GCQ)"), ("launch_angle",)),
         get_merge_value(gcq_data, ("Side Angle", "Side Angle (deg)", "Azimuth (deg)", "Side Angle(GCQ)"), ("ball_direction",)),
         backspin,
@@ -451,8 +473,8 @@ def build_merge_gcq_values(gcq_data):
         get_merge_value(gcq_data, ("Offline", "Offline (m)", "Offline(GCQ)"), ("offline",)),
         get_merge_value(gcq_data, ("Descent Angle", "Descent Angle (deg)", "Descent Angle(GCQ)"), ("descent_angle",)),
         get_merge_value(gcq_data, ("Peak Height", "Peak Height (m)", "Peak Height(GCQ)"), ("peak_height",)),
-        get_merge_value(gcq_data, ("Club Speed", "Club head Speed (m/s)", "Club Speed (m/s)", "Club Speed(GCQ)"), ("club_velocity",)),
-        get_merge_value(gcq_data, ("Efficiency", "Efficiency(GCQ)"), ()),
+        club_speed,
+        efficiency,
         attack_angle,
         club_path,
         face_to_target,
@@ -473,6 +495,12 @@ def build_merge_nx_values(nx_data):
     shotdb_name = get_merge_value(nx_data, ("ShotDB Name", "ShotDB Name(NX)"), ("shotdb_name",))
     if not shotdb_name:
         shotdb_name = Path(str(nx_data.get("shotdb_filename", ""))).stem
+    ball_speed = sanitize_merge_speed(
+        get_merge_value(nx_data, ("Ball Speed", "Ball Speed(NX)"), ("ball_velocity", "ball_speed"))
+    )
+    club_speed = sanitize_merge_speed(
+        get_merge_value(nx_data, ("Club Speed", "Club Speed(NX)"), ("club_velocity",))
+    )
 
     return [
         "NX",
@@ -480,10 +508,10 @@ def build_merge_nx_values(nx_data):
         get_merge_value(nx_data, ("ShotDB #", "ShotDB #(NX)"), ("shotdb_id", "shot_id")),
         nx_date,
         shotdb_name,
-        get_merge_value(nx_data, ("Ball Speed", "Ball Speed(NX)"), ("ball_velocity", "ball_speed")),
+        ball_speed,
         get_merge_value(nx_data, ("Ball Incidence", "Ball Incidence(NX)"), ("ball_incidence", "launch_angle")),
         get_merge_value(nx_data, ("Ball Direction", "Ball Direction(NX)"), ("ball_direction",)),
-        get_merge_value(nx_data, ("Club Speed", "Club Speed(NX)"), ("club_velocity",)),
+        club_speed,
         get_merge_value(nx_data, ("Attack Angle", "Attack Angle(NX)"), ("attack_angle", "club_incidence")),
         get_merge_value(nx_data, ("Club Path", "Club Path(NX)"), ("club_path", "club_direction")),
         get_merge_value(nx_data, ("Face Angle", "Face Angle(NX)"), ("face_angle",)),
@@ -693,6 +721,15 @@ def parse_optional_float(value, field_name):
         raise ValueError(f"Invalid {field_name}: {value}") from exc
 
 
+def parse_optional_speed(value, field_name):
+    speed_value = parse_optional_float(value, field_name)
+    if speed_value == "":
+        return ""
+    if speed_value < 0 or speed_value >= 1000:
+        return 0
+    return speed_value
+
+
 def normalize_field_name(field_name):
     return re.sub(r"[^a-z0-9]+", "", str(field_name).lower())
 
@@ -724,10 +761,25 @@ def normalize_shot_data(data):
         "timestamp": timestamp,
         "shot_id": str(data.get("shot_id", "")).strip(),
         "source_system": str(data.get("source_system", SOURCE_SYSTEM_GCQUAD)).strip() or SOURCE_SYSTEM_GCQUAD,
-        "ball_speed": parse_optional_float(data.get("ball_speed", ""), "ball_speed"),
+        "ball_speed": parse_optional_speed(
+            get_first_mapping_value(data, "ball_speed", "Ball Speed", "BallSpeed_MS"),
+            "ball_speed",
+        ),
         "launch_angle": parse_optional_float(data.get("launch_angle", ""), "launch_angle"),
         "spin_rate": parse_optional_float(data.get("spin_rate", ""), "spin_rate"),
         "club": str(data.get("club", "")).strip(),
+        "club_velocity": parse_optional_speed(
+            get_first_mapping_value(
+                data,
+                "club_velocity",
+                "club_speed",
+                "Club Speed",
+                "Club head Speed (m/s)",
+                "ClubSpeed_MS",
+                "ClubSpeedAtImpact_MS",
+            ),
+            "club_velocity",
+        ),
         "carry": parse_optional_float(data.get("carry", ""), "carry"),
         "total_distance": parse_optional_float(data.get("total_distance", ""), "total_distance"),
         "lie": parse_optional_float(get_first_mapping_value(data, "lie", "Lie", "Lie_DEG", "Lie (deg)"), "lie"),
@@ -804,10 +856,10 @@ def normalize_csv_text_shot(raw_text):
         "source_system": SOURCE_SYSTEM_GCQUAD,
         "club": parsed.get("Club", ""),
         "club_type": parsed.get("Club", ""),
-        "ball_speed": parse_optional_float(parsed.get("Ball Speed (m/s)", ""), "Ball Speed (m/s)"),
+        "ball_speed": parse_optional_speed(parsed.get("Ball Speed (m/s)", ""), "Ball Speed (m/s)"),
         "launch_angle": parse_optional_float(parsed.get("Launch Angle (deg)", ""), "Launch Angle (deg)"),
         "ball_direction": parse_optional_float(parsed.get("Azimuth (deg)", ""), "Azimuth (deg)"),
-        "club_velocity": parse_optional_float(parsed.get("Club head Speed (m/s)", ""), "Club head Speed (m/s)"),
+        "club_velocity": parse_optional_speed(parsed.get("Club head Speed (m/s)", ""), "Club head Speed (m/s)"),
         "attack_angle": parse_optional_float(vert_path, "Vert Path (deg)"),
         "club_path": parse_optional_float(horiz_path, "Horiz Path (deg)"),
         "face_angle": parse_optional_float(face_to_target, "Face to Target (deg)"),
@@ -1041,6 +1093,8 @@ def normalize_nx_csv_row(row):
     for csv_field, output_field in NX_CSV_FLOAT_FIELDS.items():
         data[output_field] = parse_nx_csv_float(row, csv_field)
 
+    data["ball_velocity"] = parse_optional_speed(data.get("ball_velocity", ""), "Ball Speed")
+    data["club_velocity"] = parse_optional_speed(data.get("club_velocity", ""), "Club Speed")
     data["shotdb_id"] = (row.get("ShotDB #") or "").strip()
     data["shot_id"] = data["shotdb_id"]
     data["timestamp"] = (row.get("Date") or "").strip()
