@@ -460,7 +460,7 @@ def build_merge_gcq_values(gcq_data):
         "GCQ",
         gcq_datetime,
         get_merge_value(gcq_data, ("Club", "Club(GCQ)"), ("club", "club_type")),
-        get_merge_value(gcq_data, ("Ball", "Ball(GCQ)", "Ball Type"), ()),
+        get_merge_value(gcq_data, ("Shot ID", "Ball", "Ball(GCQ)", "Ball Type"), ("shot_id",)),
         ball_speed,
         get_merge_value(gcq_data, ("Launch Angle", "Launch Angle (deg)", "Launch Angle(GCQ)"), ("launch_angle",)),
         get_merge_value(gcq_data, ("Side Angle", "Side Angle (deg)", "Azimuth (deg)", "Side Angle(GCQ)"), ("ball_direction",)),
@@ -485,8 +485,16 @@ def build_merge_gcq_values(gcq_data):
             ("Closure Rate", "Closure Rate (deg)", "ClosureRate", "ClosureRate_DEG", "Closure Rate(GCQ)"),
             ("closure_rate",),
         ),
-        get_merge_value(gcq_data, ("Face Impact Lateral", "Face Impact Lateral(GCQ)"), ()),
-        get_merge_value(gcq_data, ("Face Impact Vertical", "Face Impact Vertical(GCQ)"), ()),
+        get_merge_value(
+            gcq_data,
+            ("Horiz Impact", "Horiz Impact (mm)", "Horiz Impact(mm)", "Face Impact Lateral", "Face Impact Lateral(GCQ)"),
+            ("face_impact_lateral",),
+        ),
+        get_merge_value(
+            gcq_data,
+            ("Vert Impact", "Vert Impact (mm)", "Vert Impact(mm)", "Face Impact Vertical", "Face Impact Vertical(GCQ)"),
+            ("face_impact_vertical",),
+        ),
     ]
 
 
@@ -849,6 +857,8 @@ def normalize_csv_text_shot(raw_text):
         "ClosureRate",
         "ClosureRate_DEG",
     )
+    horiz_impact = get_first_csv_value(parsed, "Horiz Impact", "Horiz Impact (mm)", "Horiz Impact(mm)")
+    vert_impact = get_first_csv_value(parsed, "Vert Impact", "Vert Impact (mm)", "Vert Impact(mm)")
 
     return {
         "timestamp": shot_id,
@@ -876,6 +886,8 @@ def normalize_csv_text_shot(raw_text):
         "lie": parse_optional_float(lie, "Lie"),
         "loft": parse_optional_float(loft, "Loft"),
         "closure_rate": parse_optional_float(closure_rate, "Closure Rate"),
+        "face_impact_lateral": parse_optional_float(horiz_impact, "Horiz Impact (mm)"),
+        "face_impact_vertical": parse_optional_float(vert_impact, "Vert Impact (mm)"),
         "received_at": "",
         "source_format": "csv_text",
         "raw_text": raw_text,

@@ -1,0 +1,41 @@
+Server Viewer Ubuntu install notes
+
+1. System package
+- tkinter is required for the GUI:
+  sudo apt update
+  sudo apt install -y python3-tk
+
+2. Python packages
+- Python 3.10 or newer is recommended.
+- Required packages:
+  flask
+  requests
+- Install command:
+  python3 -m pip install flask requests
+
+3. Run
+- From this folder:
+  python3 server_viewer_tabs_ubuntu.py
+
+4. NX+ log monitoring
+- Default log directory:
+  /home/golfzon/.nxsensor/log
+- The app watches today's log file whose name contains:
+  NXSensorLog_YYYYMMDD
+- The path can be changed in the Server tab.
+
+5. Optional GRC decrypt CLI
+- To decrypt copied .grc files automatically, place this executable next to server_viewer_tabs_ubuntu.py
+  or put it in PATH:
+  grc-decrypt-cli
+- Make sure it is executable:
+  chmod +x grc-decrypt-cli
+- The app runs it after copying a .grc file:
+  ./grc-decrypt-cli <input.grc> <output_dir>
+- Decrypted files are written under:
+  ShotMerge_YYYYMMDD/grc_decrypted/<grc_file_name>/
+
+
+
+chmod +x grc-decrypt-cli
+./ServerViewerTabsUbuntu
